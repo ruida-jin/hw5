@@ -1,0 +1,221 @@
+% 1 频域低通滤波器：设计低通滤波器
+%包括 butterworth and Gaussian (选择合适的半径，计算功率谱比),
+%平滑测试图像test1和2;分析各自优缺点；
+
+% 2 频域高通滤波器：设计高通滤波器
+% 包括butterworth and Gaussian，在频域增强边缘。选择半径和计算功率谱比，
+% 测试图像test3,4：分析各自优缺点；
+
+% 3 其他高通滤波器：拉普拉斯和Unmask，
+% 对测试图像test3,4滤波；分析各自优缺点；
+
+close all
+
+image0 = imread('test4 copy.bmp');
+
+image = double(image0);
+[row,column] = size(image);
+
+%填充
+fftimage = zeros(2*row,2*column);
+fftimage(1:row,1:column) = image(:,:);
+trans = zeros(size(fftimage));
+
+%将图像移动到中央----相当于fftshift？
+for i = 1:1:size(fftimage,1)
+   for j = 1:1:size(fftimage,2)
+     trans(i,j) = (-1)^(i+j); 
+   end 
+end
+fftimage = trans.*fftimage;
+
+%进行Fourier变换
+fftimage = fft2(fftimage);
+
+%生成模板
+D0 = 60;
+%计算功率谱
+a = powerspectrum(fftimage,D0);
+%计算低通模板
+h = my_lowfilter(fftimage,'ILPF',D0);
+h1 = my_lowfilter(fftimage,'BLPF',D0);
+h2 = my_lowfilter(fftimage,'GLPF',D0);
+%计算高通模板
+H = my_highfilter(fftimage,'IHPF',D0);
+H1 = my_highfilter(fftimage,'BHPF',D0);
+H2 = my_highfilter(fftimage,'GHPF',D0);
+H3 = my_highfilter(fftimage,'LHPF',D0);
+H4 = my_highfilter(fftimage,'UHPF',D0);
+
+low_image = pass(fftimage,h,trans,image0); 
+low_image1 = pass(fftimage,h1,trans,image0);
+low_image2 = pass(fftimage,h2,trans,image0);
+
+high_image = pass(fftimage,H,trans,image0); 
+high_image1 = pass(fftimage,H1,trans,image0);
+high_image2 = pass(fftimage,H2,trans,image0);
+high_image3 = pass(fftimage,H3,trans,image0);
+high_image4 = pass(fftimage,H4,trans,image0);
+
+%显示图像
+figure;
+subplot(2,2,1);imshow(image0);title('原图像');
+subplot(2,2,2);imshow(low_image);title('理想低通滤波');
+subplot(2,2,3);imshow(low_image1);title('2阶巴特沃斯低通滤波');
+subplot(2,2,4);imshow(low_image2);title('高斯低通滤波');
+
+%显示图像
+figure;
+subplot(2,3,1);imshow(image0);title('原图像');
+subplot(2,3,2);imshow(high_image);title('理想高通滤波');
+subplot(2,3,3);imshow(high_image1);title('2阶巴特沃斯高通滤波');
+subplot(2,3,4);imshow(high_image2);title('高斯高通滤波');
+subplot(2,3,5);imshow(high_image2);title('拉普拉斯高通滤波');
+subplot(2,3,6);imshow(high_image2);title('unmasking高通滤波');
+
+%---------------------------------------------------------------------------
+%其中高通的函数
+function H = my_highfilter(image,mode,D0)
+%生成模板
+H = zeros(size(image));
+[r,c] = size(H);
+if strcmp(mode,'IHPF')
+   for i = 1:1:r
+      for j = 1:1:c
+          if sqrt((i-r/2)^2 + (j - c/2)^2) <= D0
+              H(i,j) = 0;
+          else
+              H(i,j) = 1;
+          end
+      end
+   end
+end    
+
+if strcmp(mode,'BHPF')
+     
+   for i = 1:1:r
+      for j = 1:1:c
+       H(i,j) = (1+(D0/sqrt((i-r/2)^2 + (j - c/2)^2))^(2*2))^(-1);%设为2阶
+      end
+   end
+end   
+
+if strcmp(mode,'GHPF')
+     
+   for i = 1:1:r
+      for j = 1:1:c
+       H(i,j) =1-exp((-1)*((i-r/2)^2 + (j - c/2)^2)/2/D0^2);%设为2阶
+      end
+   end
+end 
+
+if strcmp(mode,'LHPF')
+     
+   for i = 1:1:r
+      for j = 1:1:c
+       H(i,j) =((i-r/2)^2 + (j - c/2)^2)*4*pi*pi+1;%设为2阶
+      end
+   end
+end 
+
+if strcmp(mode,'UHPF')
+   for i = 1:1:r
+      for j = 1:1:c
+          if sqrt((i-r/2)^2 + (j - c/2)^2) <= D0
+              H(i,j) = 0;
+          else
+              H(i,j) = 1;
+          end
+      end
+   end
+   
+   H = 2 - H;
+end  
+
+end
+
+%-----------------------------------------------------------------------------------------------
+%生成低通模板
+function H = my_lowfilter(image,mode,D0)
+%生成模板
+H = zeros(size(image));
+[r,c] = size(H);
+if strcmp(mode,'ILPF')
+   for i = 1:1:r
+      for j = 1:1:c
+          if sqrt((i-r/2)^2 + (j - c/2)^2) <= D0
+              H(i,j) = 1;
+          else
+              H(i,j) = 0;
+          end
+      end
+   end
+end    
+
+if strcmp(mode,'BLPF')
+     
+   for i = 1:1:r
+      for j = 1:1:c
+       H(i,j) = (1+(sqrt((i-r/2)^2 + (j - c/2)^2)/D0)^(2*2))^(-1);%设为2阶
+      end
+   end
+end   
+
+if strcmp(mode,'GLPF')
+     
+   for i = 1:1:r
+      for j = 1:1:c
+       H(i,j) = exp((-1)*((i-r/2)^2 + (j - c/2)^2)/2/D0^2);%设为2阶
+      end
+   end
+end 
+
+end
+
+
+%-----------------------------------------------------------------------------------------------
+%通过滤波器
+function final_image = pass(fftimage,H,trans,image)
+
+[row,column] = size(image);
+
+%频域卷积
+fftimage = fftimage.*H;
+fftimage = real(ifft2(fftimage));
+fftimage = fftimage.*trans;
+
+%反变换得到滤波后的图像
+
+final_image = zeros(row,column);
+final_image(:,:) = fftimage(1:row,1:column);
+final_image = uint8(final_image);
+
+end
+
+
+
+%-----------------------------------------------------------------------------------------------
+%计算功率谱
+function a = powerspectrum(image,D0)
+    image = abs(image);
+    all = sum(image,'all');
+    [row,column] = size(image);
+    
+    %计算圆内功率谱
+    round = 0;
+    for i = 1:1:row
+       for j = 1:1:column
+          if sqrt((i-row/2)^2 + (j-column/2)^2) <= D0
+             round = round + image(i,j); 
+          end
+       end
+    end
+    
+    a = round/all*100;
+end
+
+
+
+
+
+
